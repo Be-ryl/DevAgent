@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 from devagent.core.state import RuntimeState
-from devagent.tools.file_tools import edit_file, read_file, write_file
+from devagent.tools.file_tools import edit_file, read_file, search_text, write_file
 
 
 class ReadFileTest(unittest.TestCase):
@@ -140,6 +140,60 @@ class EditFileTest(unittest.TestCase):
                         file_path.read_text(encoding="utf-8"),
                         content,
                     )
+
+
+class SearchTextTest(unittest.TestCase):
+    """Tests for recursive literal text search."""
+
+    def test_recursively_searches_utf8_files_with_result_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            state = RuntimeState(Path(temporary_directory) / "workspace")
+            nested = state.workspace / "docs" / "nested"
+            nested.mkdir(parents=True)
+            (state.workspace / "docs" / "a.txt").write_text(
+                "first line\nfind needle here\n",
+                encoding="utf-8",
+            )
+            (nested / "b.txt").write_text(
+                "needle again\nlast needle\n",
+                encoding="utf-8",
+            )
+            (state.workspace / "docs" / "broken.txt").write_bytes(
+                b"\xffneedle\n"
+            )
+
+            result = search_text(state, "docs", "needle", max_results=2)
+
+            self.assertEqual(
+                result,
+                {
+                    "ok": True,
+                    "path": "docs",
+                    "matches": [
+                        {
+                            "path": "docs/a.txt",
+                            "line": 2,
+                            "content": "find needle here",
+                        },
+                        {
+                            "path": "docs/nested/b.txt",
+                            "line": 1,
+                            "content": "needle again",
+                        },
+                    ],
+                    "results_returned": 2,
+                },
+            )
+
+    def test_path_outside_workspace_returns_error(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            state = RuntimeState(Path(temporary_directory) / "workspace")
+
+            result = search_text(state, "../", "needle")
+
+            self.assertFalse(result["ok"])
+            self.assertIsNone(result["path"])
+            self.assertEqual(result["error"]["code"], "invalid_path")
 
 
 if __name__ == "__main__":

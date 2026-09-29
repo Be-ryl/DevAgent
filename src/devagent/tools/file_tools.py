@@ -185,3 +185,88 @@ def edit_file(
         "path": relative_path,
         "replacements": 1,
     }
+
+
+def search_text(
+    state: RuntimeState,
+    search_path: Path | str,
+    query: str,
+    max_results: int = 100,
+) -> dict[str, Any]:
+    """Recursively search UTF-8 text files for a literal string."""
+    try:
+        resolved_path = state.resolve_path(search_path)
+    except (TypeError, ValueError):
+        return _error_result(
+            None,
+            "invalid_path",
+            "path is not valid within the workspace",
+        )
+
+    relative_path = str(resolved_path.relative_to(state.workspace))
+
+    if max_results < 0:
+        return _error_result(
+            relative_path,
+            "invalid_limit",
+            "max_results must be non-negative",
+        )
+
+    if not resolved_path.exists():
+        return _error_result(
+            relative_path,
+            "path_not_found",
+            "search path does not exist",
+        )
+
+    if resolved_path.is_file():
+        candidates = (resolved_path,)
+    elif resolved_path.is_dir():
+        candidates = sorted(resolved_path.rglob("*"))
+    else:
+        return _error_result(
+            relative_path,
+            "invalid_search_path",
+            "search path is not a file or directory",
+        )
+
+    matches: list[dict[str, Any]] = []
+    for candidate in candidates:
+        if len(matches) >= max_results:
+            break
+
+        try:
+            candidate_relative = candidate.relative_to(state.workspace)
+            safe_candidate = state.resolve_path(candidate_relative)
+        except (OSError, ValueError):
+            continue
+
+        if not safe_candidate.is_file():
+            continue
+
+        try:
+            content = safe_candidate.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+
+        result_path = str(safe_candidate.relative_to(state.workspace))
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            if query not in line:
+                continue
+
+            matches.append(
+                {
+                    "path": result_path,
+                    "line": line_number,
+                    "content": line,
+                }
+            )
+            if len(matches) >= max_results:
+                break
+
+    return {
+        "ok": True,
+        "path": relative_path,
+        "matches": matches,
+        "results_returned": len(matches),
+    }
