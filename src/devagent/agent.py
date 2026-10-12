@@ -119,13 +119,24 @@ def run_agent(
             )
             if trace_fn is not None and function["name"] == "knowledge_search":
                 for hit in result.get("results", []):
-                    trace_fn(
-                        "[retrieval_hit] "
-                        f"rank={hit['rank']} source={hit['source']} "
-                        f"chunk_id={hit['chunk_id']} "
-                        f"score={hit['score']:.6f} "
-                        f"content_preview={_content_preview(hit.get('content', ''))}"
-                    )
+                    if "rrf_score" in hit:
+                        trace_fn(
+                            "[retrieval_hit] "
+                            f"rank={hit['rank']} chunk_id={hit['chunk_id']} "
+                            f"bm25_rank={hit.get('bm25_rank', '-')} "
+                            f"dense_rank={hit.get('dense_rank', '-')} "
+                            f"rrf_score={hit['rrf_score']:.6f} "
+                            f"source={hit['source']} "
+                            f"content_preview={_content_preview(hit.get('content', ''))}"
+                        )
+                    else:
+                        trace_fn(
+                            "[retrieval_hit] "
+                            f"rank={hit['rank']} source={hit['source']} "
+                            f"chunk_id={hit['chunk_id']} "
+                            f"score={hit['score']:.6f} "
+                            f"content_preview={_content_preview(hit.get('content', ''))}"
+                        )
 
             messages.append(
                 {

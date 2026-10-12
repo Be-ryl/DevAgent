@@ -41,7 +41,7 @@ class Chunk:
 
 @dataclass(frozen=True)
 class RetrievalHit:
-    """One ranked BM25 result."""
+    """One ranked retrieval result, optionally including fusion ranks."""
 
     chunk_id: str
     source: str
@@ -52,6 +52,9 @@ class RetrievalHit:
     source_url: str | None = None
     version: str | None = None
     retrieved_at: str | None = None
+    bm25_rank: int | None = None
+    dense_rank: int | None = None
+    rrf_score: float | None = None
 
 
 def _front_matter(content: str) -> tuple[dict[str, str], str]:

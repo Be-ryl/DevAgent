@@ -14,6 +14,7 @@ from devagent.tools.knowledge_tool import knowledge_search
 
 if TYPE_CHECKING:
     from devagent.rag.dense_index import DenseRagService
+    from devagent.rag.hybrid import HybridRagService
     from devagent.rag.service import BM25RagService
 
 
@@ -138,7 +139,7 @@ class ToolRegistry(dict[str, ToolDefinition]):
 
 def build_tools(
     state: RuntimeState,
-    rag_service: "BM25RagService | DenseRagService | None" = None,
+    rag_service: "BM25RagService | DenseRagService | HybridRagService | None" = None,
 ) -> ToolRegistry:
     """Build tools and optionally bind one prebuilt local RAG service."""
     tools = ToolRegistry({

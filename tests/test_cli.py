@@ -228,6 +228,75 @@ class CliTest(unittest.TestCase):
         )
         self.assertEqual(stdout.getvalue(), "dense answer\n")
 
+    @patch(
+        "devagent.rag.hybrid.HybridRagService",
+        return_value=sentinel.hybrid_service,
+    )
+    @patch(
+        "devagent.rag.dense_index.DenseRagService.from_index",
+        return_value=sentinel.dense_service,
+    )
+    @patch(
+        "devagent.cli.app.BM25RagService.from_directory",
+        return_value=sentinel.bm25_service,
+    )
+    @patch("devagent.cli.app.run_agent", return_value="hybrid answer")
+    @patch("devagent.cli.app.build_tools", return_value=sentinel.registry)
+    @patch("devagent.cli.app.RuntimeState", return_value=sentinel.state)
+    def test_cli_loads_hybrid_services_and_builds_one_knowledge_tool(
+        self,
+        mock_runtime_state,
+        mock_build_tools,
+        mock_run_agent,
+        mock_bm25_from_directory,
+        mock_dense_from_index,
+        mock_hybrid_service,
+    ) -> None:
+        stdout = StringIO()
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            knowledge_directory = Path(temporary_directory)
+            index_directory = Path("/tmp/devagent-dense-index")
+            with patch.dict(
+                os.environ,
+                {"DEEPSEEK_API_KEY": "test-key-not-a-real-secret"},
+            ), redirect_stdout(stdout):
+                status = main(
+                    [
+                        "--retrieval-mode",
+                        "hybrid",
+                        "--knowledge-dir",
+                        str(knowledge_directory),
+                        "--dense-index-dir",
+                        str(index_directory),
+                        "--embedding-model",
+                        "fake-model",
+                        "search policies",
+                    ]
+                )
+
+        self.assertEqual(status, 0)
+        mock_runtime_state.assert_called_once_with(Path.cwd())
+        mock_bm25_from_directory.assert_called_once_with(knowledge_directory)
+        mock_dense_from_index.assert_called_once_with(
+            index_directory,
+            model_name="fake-model",
+            knowledge_directory=knowledge_directory,
+        )
+        mock_hybrid_service.assert_called_once_with(
+            sentinel.bm25_service,
+            sentinel.dense_service,
+        )
+        mock_build_tools.assert_called_once_with(
+            sentinel.state,
+            sentinel.hybrid_service,
+        )
+        mock_run_agent.assert_called_once_with(
+            "search policies",
+            sentinel.registry,
+        )
+        self.assertEqual(stdout.getvalue(), "hybrid answer\n")
+
     @patch("devagent.cli.app.run_agent")
     @patch("devagent.cli.app.build_tools", return_value=sentinel.registry)
     @patch("devagent.cli.app.RuntimeState", return_value=sentinel.state)

@@ -41,14 +41,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--retrieval-mode",
-        choices=("bm25", "dense"),
+        choices=("bm25", "dense", "hybrid"),
         default="bm25",
         help="knowledge retrieval implementation (default: bm25)",
     )
     parser.add_argument(
         "--dense-index-dir",
         type=Path,
-        help="local Dense index directory (required for dense mode)",
+        help="local Dense index directory (required for dense/hybrid mode)",
     )
     parser.add_argument(
         "--embedding-model",
@@ -84,17 +84,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     state = RuntimeState(args.workspace)
-    if args.retrieval_mode == "dense":
+    if args.retrieval_mode in {"dense", "hybrid"}:
         if args.dense_index_dir is None:
             print(
-                "Error: --dense-index-dir is required for dense retrieval mode.",
+                "Error: --dense-index-dir is required for dense/hybrid retrieval mode.",
+                file=sys.stderr,
+            )
+            return 2
+        if args.retrieval_mode == "hybrid" and knowledge_directory is None:
+            print(
+                "Error: --knowledge-dir is required for hybrid retrieval mode.",
                 file=sys.stderr,
             )
             return 2
         try:
             from devagent.rag.dense_index import DenseIndexError, DenseRagService
 
-            rag_service = DenseRagService.from_index(
+            dense_service = DenseRagService.from_index(
                 args.dense_index_dir,
                 model_name=args.embedding_model,
                 knowledge_directory=knowledge_directory,
@@ -109,6 +115,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         except DenseIndexError as error:
             print(f"Error: {error}", file=sys.stderr)
             return 2
+        if args.retrieval_mode == "hybrid":
+            from devagent.rag.hybrid import HybridRagService
+
+            bm25_service = BM25RagService.from_directory(knowledge_directory)
+            rag_service = HybridRagService(bm25_service, dense_service)
+        else:
+            rag_service = dense_service
         registry = build_tools(state, rag_service)
     elif knowledge_directory is None:
         registry = build_tools(state)

@@ -162,5 +162,19 @@ python -m devagent \
   "请查询国航政策：我刚做完手术，还能坐飞机吗？"
 ```
 
-当前版本的 `knowledge_search` 支持 BM25 或本地 Dense 二选一；尚未实现 RRF、
-Reranker、向量数据库、多轮记忆、LangChain/LangGraph、MCP、多 Agent或云部署。
+使用 BM25 与 Dense 各召回 20 个候选，并通过 RRF 融合后交给同一个
+`knowledge_search` Tool：
+
+```bash
+python -m devagent \
+  --trace \
+  --retrieval-mode hybrid \
+  --knowledge-dir data/airchina/processed \
+  --dense-index-dir data/indexes/airchina-dense \
+  --embedding-model BAAI/bge-small-zh-v1.5 \
+  --workspace /Users/xiaomaibufubuzhang/devagent \
+  "请查询国航政策：我刚做完手术，还能坐飞机吗？"
+```
+
+当前版本支持 BM25、Dense 或 BM25 + Dense RRF 融合；尚未实现 Reranker、
+向量数据库、多轮记忆、LangChain/LangGraph、MCP、多 Agent 或云部署。
