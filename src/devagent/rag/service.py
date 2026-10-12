@@ -4,6 +4,7 @@ import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass
 import hashlib
+import json
 from pathlib import Path
 import re
 
@@ -19,6 +20,9 @@ class Document:
     title: str
     source: str
     content: str
+    source_url: str | None = None
+    version: str | None = None
+    retrieved_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -30,6 +34,9 @@ class Chunk:
     source: str
     content: str
     position: int
+    source_url: str | None = None
+    version: str | None = None
+    retrieved_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -42,6 +49,31 @@ class RetrievalHit:
     score: float
     rank: int
     retrieved_by: list[str]
+    source_url: str | None = None
+    version: str | None = None
+    retrieved_at: str | None = None
+
+
+def _front_matter(content: str) -> tuple[dict[str, str], str]:
+    """Separate importer metadata from the searchable Markdown body."""
+    match = re.match(r"\A---\s*\n(.*?)\n---(?:\n|\Z)", content, re.DOTALL)
+    if match is None:
+        return {}, content
+
+    metadata: dict[str, str] = {}
+    for line in match.group(1).splitlines():
+        key, separator, raw_value = line.partition(":")
+        if not separator:
+            continue
+        key = key.strip()
+        raw_value = raw_value.strip()
+        try:
+            value = json.loads(raw_value)
+        except json.JSONDecodeError:
+            value = raw_value
+        if isinstance(value, str):
+            metadata[key] = value
+    return metadata, content[match.end() :].lstrip("\n")
 
 
 def _document_title(content: str, fallback: str) -> str:
@@ -66,14 +98,18 @@ def load_documents(directory: Path | str) -> list[Document]:
         if not path.is_file():
             continue
 
-        content = path.read_text(encoding="utf-8")
+        raw_content = path.read_text(encoding="utf-8")
+        metadata, content = _front_matter(raw_content)
         source = path.relative_to(root).as_posix()
         documents.append(
             Document(
                 document_id=path.stem,
-                title=_document_title(content, path.stem),
+                title=metadata.get("title") or _document_title(content, path.stem),
                 source=source,
                 content=content,
+                source_url=metadata.get("source_url"),
+                version=metadata.get("version"),
+                retrieved_at=metadata.get("retrieved_at"),
             )
         )
 
@@ -81,15 +117,31 @@ def load_documents(directory: Path | str) -> list[Document]:
 
 
 def chunk_document(document: Document, max_chunk_chars: int = 600) -> list[Chunk]:
-    """Split Markdown blocks, then split oversized blocks by character count."""
+    """Merge headings into following text, then split oversized content."""
     if max_chunk_chars <= 0:
         raise ValueError("max_chunk_chars must be positive")
 
-    blocks = [
+    raw_blocks = [
         block.strip()
         for block in re.split(r"\n\s*\n", document.content)
         if block.strip()
     ]
+    blocks: list[str] = []
+    pending_headings: list[str] = []
+    for block in raw_blocks:
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        is_heading = bool(lines) and all(
+            re.match(r"^#{1,6}\s+\S", line) for line in lines
+        )
+        if is_heading:
+            pending_headings.append(block)
+            continue
+        if pending_headings:
+            block = "\n\n".join([*pending_headings, block])
+            pending_headings.clear()
+        blocks.append(block)
+
+    # A heading with no following body is navigation, not retrievable evidence.
     contents: list[str] = []
     for block in blocks:
         contents.extend(
@@ -108,6 +160,9 @@ def chunk_document(document: Document, max_chunk_chars: int = 600) -> list[Chunk
                 source=document.source,
                 content=content,
                 position=position,
+                source_url=document.source_url,
+                version=document.version,
+                retrieved_at=document.retrieved_at,
             )
         )
     return chunks
@@ -197,6 +252,9 @@ class BM25RagService:
                 score=score,
                 rank=rank,
                 retrieved_by=["bm25"],
+                source_url=chunk.source_url,
+                version=chunk.version,
+                retrieved_at=chunk.retrieved_at,
             )
             for rank, (score, chunk) in enumerate(ranked, start=1)
         ]
@@ -218,7 +276,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     for hit in hits:
-        print(f"\n#{hit.rank} source={hit.source} score={hit.score:.6f}")
+        metadata = ""
+        if hit.version:
+            metadata += f" version={hit.version}"
+        if hit.source_url:
+            metadata += f" source_url={hit.source_url}"
+        print(
+            f"\n#{hit.rank} source={hit.source} score={hit.score:.6f}{metadata}"
+        )
         print(hit.content)
     return 0
 

@@ -300,7 +300,9 @@ class KnowledgeSearchAgentIntegrationTest(unittest.TestCase):
         )
         self.assertRegex(
             trace_events[1],
-            r"^\[retrieval_hit\] rank=1 source=baggage_policy\.md score=\d+\.\d{6}$",
+            r"^\[retrieval_hit\] rank=1 source=baggage_policy\.md "
+            r"chunk_id=baggage_policy-[0-9a-f]{16} score=\d+\.\d{6} "
+            r'content_preview=".*60.*"$',
         )
         self.assertEqual(
             trace_events[2],

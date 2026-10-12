@@ -84,6 +84,38 @@ class DocumentAndChunkTest(unittest.TestCase):
         self.assertGreater(len(chunks), 2)
         self.assertTrue(all(len(chunk.content) <= 80 for chunk in chunks))
 
+    def test_front_matter_is_metadata_and_headings_merge_with_body(self) -> None:
+        markdown = """---
+title: "官方政策"
+source_url: "https://www.airchina.com.cn/policy"
+version: "2026年4月版"
+retrieved_at: "2026-10-12"
+---
+
+# 官方政策
+
+## 赔偿标准
+
+被拒绝登机旅客可以按标准选择货币或代金券赔偿。
+"""
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            (directory / "official.md").write_text(markdown, encoding="utf-8")
+
+            service = BM25RagService.from_directory(directory)
+
+        self.assertEqual(service.documents[0].source_url, "https://www.airchina.com.cn/policy")
+        self.assertEqual(service.documents[0].version, "2026年4月版")
+        self.assertEqual(service.documents[0].retrieved_at, "2026-10-12")
+        self.assertEqual(len(service.chunks), 1)
+        chunk = service.chunks[0]
+        self.assertIn("# 官方政策", chunk.content)
+        self.assertIn("## 赔偿标准", chunk.content)
+        self.assertIn("货币或代金券赔偿", chunk.content)
+        self.assertNotIn("source_url", chunk.content)
+        self.assertNotIn("retrieved_at", chunk.content)
+        self.assertNotIn("2026-10-12", chunk.content)
+
 
 class BM25RagServiceTest(unittest.TestCase):
     """Tests for local Chinese BM25 ranking behavior."""

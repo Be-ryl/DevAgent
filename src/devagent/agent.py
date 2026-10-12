@@ -14,10 +14,19 @@ from devagent.tools.registry import (
 
 ChatFunction = Callable[..., dict[str, Any]]
 TraceFunction = Callable[[str], None]
+TRACE_PREVIEW_CHARACTERS = 80
 
 
 class MaxToolRoundsError(RuntimeError):
     """Raised when the model requests tools after the configured limit."""
+
+
+def _content_preview(content: Any) -> str:
+    """Return one short JSON-safe line for retrieval tracing."""
+    preview = " ".join(str(content).split())
+    if len(preview) > TRACE_PREVIEW_CHARACTERS:
+        preview = preview[: TRACE_PREVIEW_CHARACTERS - 3] + "..."
+    return json.dumps(preview, ensure_ascii=False)
 
 
 def _invoke_tool(
@@ -113,7 +122,9 @@ def run_agent(
                     trace_fn(
                         "[retrieval_hit] "
                         f"rank={hit['rank']} source={hit['source']} "
-                        f"score={hit['score']:.6f}"
+                        f"chunk_id={hit['chunk_id']} "
+                        f"score={hit['score']:.6f} "
+                        f"content_preview={_content_preview(hit.get('content', ''))}"
                     )
 
             messages.append(

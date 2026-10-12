@@ -1,0 +1,45 @@
+{
+  "documents": [
+    {
+      "id": "passenger_baggage_conditions",
+      "title": "中国国际航空股份有限公司旅客、行李运输总条件",
+      "url": "https://www.airchina.com.cn/zh-CN/content/trans_conditions/general/",
+      "version": "2026年7月版",
+      "content_attribute": "data-content",
+      "minimum_characters": 5000
+    },
+    {
+      "id": "domestic_refund_change_rules",
+      "title": "国内客票自愿退票和自愿变更实施细则",
+      "url": "https://www.airchina.com.cn/zh-CN/content/trans_conditions/refund/",
+      "version": "2026年04月版",
+      "content_attribute": "content-data",
+      "minimum_characters": 1000
+    },
+    {
+      "id": "passengers_with_disabilities",
+      "title": "残疾人及行动不便旅客运输规定",
+      "url": "https://www.airchina.com.cn/zh-CN/content/trans_conditions/disability/",
+      "version": "2026年4月版",
+      "content_attribute": "content-data",
+      "minimum_characters": 1000
+    },
+    {
+      "id": "overbooking_compensation",
+      "title": "航班超售及非自愿降舱处置赔补偿标准",
+      "url": "https://www.airchina.com.cn/zh-CN/content/trans_conditions/overbooking/",
+      "version": "2026年4月版",
+      "content_attribute": "content-data",
+      "search_aliases": ["航班超售后补偿"],
+      "minimum_characters": 1000
+    },
+    {
+      "id": "medical_postoperative_transport",
+      "title": "伤病及术后旅客运输规定",
+      "url": "https://www.airchina.com.cn/zh-CN/content/trans_conditions/zggjhkgfyxgs--sbjshlkysgd/",
+      "version": "2023年9月版",
+      "content_attribute": "content-data",
+      "minimum_characters": 1000
+    }
+  ]
+}

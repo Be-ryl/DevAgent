@@ -17,5 +17,12 @@ def knowledge_search(
     return {
         "ok": True,
         "query": query,
-        "results": [asdict(hit) for hit in hits],
+        "results": [
+            {
+                key: value
+                for key, value in asdict(hit).items()
+                if value is not None
+            }
+            for hit in hits
+        ],
     }

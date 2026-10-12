@@ -197,7 +197,9 @@ class CliTest(unittest.TestCase):
                 '[tool_call] knowledge_search query="行李收费" top_k=3'
             )
             trace_fn(
-                "[retrieval_hit] rank=1 source=baggage_policy.md score=3.250000"
+                "[retrieval_hit] rank=1 source=baggage_policy.md "
+                "chunk_id=baggage-001 score=3.250000 "
+                'content_preview="超额行李费为每公斤 60 元。"'
             )
             trace_fn("[tool_result] returned_to_model=true")
             return "final answer"
@@ -217,7 +219,9 @@ class CliTest(unittest.TestCase):
             stderr.getvalue().splitlines(),
             [
                 '[tool_call] knowledge_search query="行李收费" top_k=3',
-                "[retrieval_hit] rank=1 source=baggage_policy.md score=3.250000",
+                "[retrieval_hit] rank=1 source=baggage_policy.md "
+                "chunk_id=baggage-001 score=3.250000 "
+                'content_preview="超额行李费为每公斤 60 元。"',
                 "[tool_result] returned_to_model=true",
             ],
         )

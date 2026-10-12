@@ -103,5 +103,35 @@ python -m devagent.evaluation.retrieval_eval \
 测评会先确认每条 `evidence_substring` 确实存在于标注的政策原文中，然后输出逐题
 结果以及 exact、paraphrase、typo、noise 四类汇总指标。
 
+## 国航官方政策语料
+
+从来源清单导入最新版公开政策。原始 HTML 会缓存在 `data/airchina/raw`，再次运行
+默认使用缓存；需要主动重新获取时增加 `--refresh`：
+
+```bash
+python -m devagent.ingestion.airchina \
+  --manifest data/airchina/sources.json \
+  --output data/airchina/processed
+```
+
+直接检索处理后的国航政策：
+
+```bash
+python -m devagent.rag.service \
+  data/airchina/processed \
+  "航班超售后国航如何补偿？" \
+  --top-k 3
+```
+
+让 Agent 使用国航政策知识库：
+
+```bash
+python -m devagent \
+  --trace \
+  --workspace /Users/xiaomaibufubuzhang/devagent \
+  --knowledge-dir /Users/xiaomaibufubuzhang/devagent/data/airchina/processed \
+  "请查询国航官方政策，说明航班超售后的处理规则并给出来源。"
+```
+
 当前版本的 `knowledge_search` 只使用 BM25；尚未实现 Dense Retrieval、RRF、
 多轮记忆、LangChain/LangGraph、MCP、多 Agent 或云部署。
