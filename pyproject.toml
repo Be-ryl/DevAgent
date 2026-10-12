@@ -16,6 +16,12 @@ dependencies = [
     "rank-bm25>=0.2,<1",
 ]
 
+[project.optional-dependencies]
+dense = [
+    "numpy>=1.26,<3",
+    "sentence-transformers>=3.0,<6",
+]
+
 [project.scripts]
 devagent = "devagent.cli.app:main"
 

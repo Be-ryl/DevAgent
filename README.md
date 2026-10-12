@@ -133,5 +133,34 @@ python -m devagent \
   "请查询国航官方政策，说明航班超售后的处理规则并给出来源。"
 ```
 
-当前版本的 `knowledge_search` 只使用 BM25；尚未实现 Dense Retrieval、RRF、
-多轮记忆、LangChain/LangGraph、MCP、多 Agent 或云部署。
+## Dense Retrieval
+
+Dense Retrieval 使用可选依赖，不影响基础 BM25 安装：
+
+```bash
+python -m pip install -e '.[dense]'
+```
+
+使用与 BM25 完全相同的清洗后 Chunk 建立本地 NumPy 索引：
+
+```bash
+python -m devagent.rag.dense_index build \
+  --knowledge-dir data/airchina/processed \
+  --index-dir data/indexes/airchina-dense \
+  --model BAAI/bge-small-zh-v1.5
+```
+
+通过原有 `knowledge_search` Tool 使用 Dense 检索：
+
+```bash
+python -m devagent \
+  --trace \
+  --retrieval-mode dense \
+  --dense-index-dir data/indexes/airchina-dense \
+  --embedding-model BAAI/bge-small-zh-v1.5 \
+  --workspace /Users/xiaomaibufubuzhang/devagent \
+  "请查询国航政策：我刚做完手术，还能坐飞机吗？"
+```
+
+当前版本的 `knowledge_search` 支持 BM25 或本地 Dense 二选一；尚未实现 RRF、
+Reranker、向量数据库、多轮记忆、LangChain/LangGraph、MCP、多 Agent或云部署。
