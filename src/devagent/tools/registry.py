@@ -3,13 +3,17 @@
 from collections.abc import Callable
 from functools import partial
 import json
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from devagent.core.state import RuntimeState
 from devagent.tools.bash_tool import run_command
 from devagent.tools.file_tools import edit_file, read_file, search_text, write_file
+from devagent.tools.knowledge_tool import knowledge_search
+
+if TYPE_CHECKING:
+    from devagent.rag.service import BM25RagService
 
 
 class ToolArgs(BaseModel):
@@ -54,6 +58,13 @@ class RunCommandArgs(ToolArgs):
 
     command: list[str]
     timeout: float = 30.0
+
+
+class KnowledgeSearchArgs(ToolArgs):
+    """Arguments for ``knowledge_search``."""
+
+    query: str
+    top_k: int = Field(default=5, ge=1, le=10)
 
 
 class ToolDefinition(TypedDict):
@@ -124,9 +135,12 @@ class ToolRegistry(dict[str, ToolDefinition]):
         return tool["function"](**validated.model_dump())
 
 
-def build_tools(state: RuntimeState) -> ToolRegistry:
-    """Build the tool registry with ``state`` bound to every callable."""
-    return ToolRegistry({
+def build_tools(
+    state: RuntimeState,
+    rag_service: "BM25RagService | None" = None,
+) -> ToolRegistry:
+    """Build tools and optionally bind one prebuilt local RAG service."""
+    tools = ToolRegistry({
         "read_file": {
             "name": "read_file",
             "description": "Read lines from a UTF-8 file in the workspace.",
@@ -158,4 +172,15 @@ def build_tools(state: RuntimeState) -> ToolRegistry:
             "function": partial(run_command, state),
         },
     })
+    if rag_service is not None:
+        tools["knowledge_search"] = {
+            "name": "knowledge_search",
+            "description": (
+                "Search the local travel policy knowledge base and return "
+                "evidence chunks needed to answer the user's question."
+            ),
+            "args_model": KnowledgeSearchArgs,
+            "function": partial(knowledge_search, rag_service),
+        }
+    return tools
 

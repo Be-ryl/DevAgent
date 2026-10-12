@@ -47,6 +47,27 @@ python -m devagent "你好"
 python -m devagent --workspace . "请调用 read_file 工具读取 README.md，并概括内容。"
 ```
 
+启用本地旅游政策知识库，让模型可以调用 `knowledge_search`：
+
+```bash
+python -m devagent \
+  --workspace /Users/xiaomaibufubuzhang/devagent \
+  --knowledge-dir /Users/xiaomaibufubuzhang/devagent/data/policies \
+  "请查询知识库，告诉我托运行李超重如何收费，并说明信息来源。"
+```
+
+增加 `--trace` 可在 stderr 查看模型是否调用检索工具、命中的来源和分数：
+
+```bash
+python -m devagent \
+  --trace \
+  --workspace /Users/xiaomaibufubuzhang/devagent \
+  --knowledge-dir /Users/xiaomaibufubuzhang/devagent/data/policies \
+  "请查询知识库，告诉我托运行李超重如何收费，并说明信息来源。"
+```
+
+不传 `--trace` 时只输出最终回答。
+
 安装后也可以使用等价的 `devagent` 命令。
 
 ## 测试
@@ -68,5 +89,19 @@ python -m devagent.rag.service data/policies "酒店入住前一天取消收费�
 输出包含查询、命中的 Chunk、来源文件、BM25 分数和排名。BM25 分数只用于当前
 查询内的相对排序，不是概率。
 
-当前版本尚未实现完整 RAG、知识库 Tool、Dense Retrieval、RRF、多轮记忆、
-LangChain/LangGraph、MCP、多 Agent 或云部署。
+## BM25 离线测评
+
+以下命令使用仓库内的人工标注题目计算来源 Recall@3 和 MRR，不调用模型 API：
+
+```bash
+python -m devagent.evaluation.retrieval_eval \
+  --knowledge-dir data/policies \
+  --cases data/evaluation/retrieval_cases.jsonl \
+  --top-k 3
+```
+
+测评会先确认每条 `evidence_substring` 确实存在于标注的政策原文中，然后输出逐题
+结果以及 exact、paraphrase、typo、noise 四类汇总指标。
+
+当前版本的 `knowledge_search` 只使用 BM25；尚未实现 Dense Retrieval、RRF、
+多轮记忆、LangChain/LangGraph、MCP、多 Agent 或云部署。

@@ -1,0 +1,24 @@
+{"id":"bag-01-exact","topic_id":"bag-01","query":"经济舱免费托运行李额度是多少？","expected_source":"baggage_policy.md","evidence_substring":"经济舱免费托运行李额度为 20 公斤","type":"exact"}
+{"id":"coupon-01-exact","topic_id":"coupon-01","query":"优惠券在退款审核完成后多久退回账户？","expected_source":"coupon_policy.md","evidence_substring":"优惠券通常在退款审核完成后 24 小时内退回账户","type":"exact"}
+{"id":"cs-01-exact","topic_id":"cs-01","query":"人工在线服务时间是什么时候？","expected_source":"customer_service.md","evidence_substring":"人工在线服务时间为每日 09:00 至 21:00","type":"exact"}
+{"id":"chg-01-exact","topic_id":"chg-01","query":"国内机票起飞前 24 小时以上申请改签，服务费是多少？","expected_source":"flight_change.md","evidence_substring":"国内机票在航班起飞前 24 小时以上申请改签，收取每位旅客 30 元改签服务费","type":"exact"}
+{"id":"ref-01-exact","topic_id":"ref-01","query":"机票起飞前 24 小时以上申请退票，手续费比例是多少？","expected_source":"flight_refund.md","evidence_substring":"起飞前 24 小时以上申请，收取票面价的 5%","type":"exact"}
+{"id":"hca-01-exact","topic_id":"hca-01","query":"入住日前一天 18:00 之前取消酒店，是否收取手续费？","expected_source":"hotel_cancellation.md","evidence_substring":"在入住日前一天 18:00 之前取消，免收取消手续费并退还全部已支付房费","type":"exact"}
+{"id":"hci-01-exact","topic_id":"hci-01","query":"酒店标准入住和退房时间分别是什么时候？","expected_source":"hotel_checkin.md","evidence_substring":"标准入住时间为酒店当地时间 14:00 以后，退房时间为离店日 12:00 以前","type":"exact"}
+{"id":"inv-01-exact","topic_id":"inv-01","query":"订单服务完成后几天内要提交开票申请？","expected_source":"invoice_policy.md","evidence_substring":"用户应在订单服务完成后的 7 天内提交开票申请","type":"exact"}
+{"id":"bag-01-paraphrase","topic_id":"bag-01","query":"坐经济舱最多能免费托运多重的箱子？","expected_source":"baggage_policy.md","evidence_substring":"经济舱免费托运行李额度为 20 公斤","type":"paraphrase"}
+{"id":"coupon-01-paraphrase","topic_id":"coupon-01","query":"订单取消以后，用掉的券大概多久能回到账号？","expected_source":"coupon_policy.md","evidence_substring":"优惠券通常在退款审核完成后 24 小时内退回账户","type":"paraphrase"}
+{"id":"cs-01-paraphrase","topic_id":"cs-01","query":"晚上几点以后就找不到在线人工客服了？","expected_source":"customer_service.md","evidence_substring":"人工在线服务时间为每日 09:00 至 21:00","type":"paraphrase"}
+{"id":"chg-01-paraphrase","topic_id":"chg-01","query":"航班还有一天多才起飞，现在换日期每人要付多少钱？","expected_source":"flight_change.md","evidence_substring":"国内机票在航班起飞前 24 小时以上申请改签，收取每位旅客 30 元改签服务费","type":"paraphrase"}
+{"id":"ref-01-paraphrase","topic_id":"ref-01","query":"飞机还有超过一天起飞，现在退票会扣票价的百分之几？","expected_source":"flight_refund.md","evidence_substring":"起飞前 24 小时以上申请，收取票面价的 5%","type":"paraphrase"}
+{"id":"hca-01-paraphrase","topic_id":"hca-01","query":"提前一天傍晚六点前退掉酒店，房费能全退吗？","expected_source":"hotel_cancellation.md","evidence_substring":"在入住日前一天 18:00 之前取消，免收取消手续费并退还全部已支付房费","type":"paraphrase"}
+{"id":"hci-01-paraphrase","topic_id":"hci-01","query":"酒店通常几点可以拿房，离店当天最晚几点退房？","expected_source":"hotel_checkin.md","evidence_substring":"标准入住时间为酒店当地时间 14:00 以后，退房时间为离店日 12:00 以前","type":"paraphrase"}
+{"id":"inv-01-paraphrase","topic_id":"inv-01","query":"行程结束后，申请开发票的期限有多长？","expected_source":"invoice_policy.md","evidence_substring":"用户应在订单服务完成后的 7 天内提交开票申请","type":"paraphrase"}
+{"id":"bag-01-typo","topic_id":"bag-01","query":"经济仓免费托运行李多少公斤？","expected_source":"baggage_policy.md","evidence_substring":"经济舱免费托运行李额度为 20 公斤","type":"typo"}
+{"id":"coupon-01-typo","topic_id":"coupon-01","query":"优惠卷退单后多久退回账护？","expected_source":"coupon_policy.md","evidence_substring":"优惠券通常在退款审核完成后 24 小时内退回账户","type":"typo"}
+{"id":"chg-01-typo","topic_id":"chg-01","query":"起飞前 24 小时以上改签收废多少？","expected_source":"flight_change.md","evidence_substring":"国内机票在航班起飞前 24 小时以上申请改签，收取每位旅客 30 元改签服务费","type":"typo"}
+{"id":"hca-01-typo","topic_id":"hca-01","query":"入住前一天六点前取消酒点要收费吗？","expected_source":"hotel_cancellation.md","evidence_substring":"在入住日前一天 18:00 之前取消，免收取消手续费并退还全部已支付房费","type":"typo"}
+{"id":"cs-01-noise","topic_id":"cs-01","query":"我正在赶地铁，手机快没电了，人工在线客服每天服务到几点？","expected_source":"customer_service.md","evidence_substring":"人工在线服务时间为每日 09:00 至 21:00","type":"noise"}
+{"id":"ref-01-noise","topic_id":"ref-01","query":"朋友临时不去了，天气倒是很好；航班起飞还有两天，现在退票扣票价多少比例？","expected_source":"flight_refund.md","evidence_substring":"起飞前 24 小时以上申请，收取票面价的 5%","type":"noise"}
+{"id":"hci-01-noise","topic_id":"hci-01","query":"我带了一个蓝色行李箱，第一次去这座城市，请问酒店几点入住、几点退房？","expected_source":"hotel_checkin.md","evidence_substring":"标准入住时间为酒店当地时间 14:00 以后，退房时间为离店日 12:00 以前","type":"noise"}
+{"id":"inv-01-noise","topic_id":"inv-01","query":"同事说最近办公室很忙，与订单无关；旅行结束以后最晚几天内申请发票？","expected_source":"invoice_policy.md","evidence_substring":"用户应在订单服务完成后的 7 天内提交开票申请","type":"noise"}

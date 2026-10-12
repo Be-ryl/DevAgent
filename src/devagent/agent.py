@@ -13,6 +13,7 @@ from devagent.tools.registry import (
 
 
 ChatFunction = Callable[..., dict[str, Any]]
+TraceFunction = Callable[[str], None]
 
 
 class MaxToolRoundsError(RuntimeError):
@@ -58,6 +59,7 @@ def run_agent(
     registry: ToolRegistry,
     chat_fn: ChatFunction | None = None,
     max_tool_rounds: int = 4,
+    trace_fn: TraceFunction | None = None,
 ) -> str:
     """Run the minimal model-tool loop and return the final text response."""
     if max_tool_rounds < 0:
@@ -87,11 +89,33 @@ def run_agent(
 
         for tool_call in tool_calls:
             function = tool_call["function"]
+            if trace_fn is not None and function["name"] == "knowledge_search":
+                try:
+                    trace_arguments = json.loads(function["arguments"])
+                except (json.JSONDecodeError, TypeError):
+                    trace_arguments = {}
+                if not isinstance(trace_arguments, dict):
+                    trace_arguments = {}
+                query = trace_arguments.get("query", "")
+                top_k = trace_arguments.get("top_k", 5)
+                trace_fn(
+                    "[tool_call] knowledge_search "
+                    f"query={json.dumps(query, ensure_ascii=False)} top_k={top_k}"
+                )
+
             result = _invoke_tool(
                 registry=registry,
                 name=function["name"],
                 raw_arguments=function["arguments"],
             )
+            if trace_fn is not None and function["name"] == "knowledge_search":
+                for hit in result.get("results", []):
+                    trace_fn(
+                        "[retrieval_hit] "
+                        f"rank={hit['rank']} source={hit['source']} "
+                        f"score={hit['score']:.6f}"
+                    )
+
             messages.append(
                 {
                     "role": "tool",
@@ -99,5 +123,7 @@ def run_agent(
                     "content": json.dumps(result, ensure_ascii=False),
                 }
             )
+            if trace_fn is not None and function["name"] == "knowledge_search":
+                trace_fn("[tool_result] returned_to_model=true")
 
         tool_rounds += 1

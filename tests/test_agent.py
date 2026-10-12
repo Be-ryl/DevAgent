@@ -2,12 +2,16 @@
 
 from copy import deepcopy
 import json
+from pathlib import Path
+import tempfile
 import unittest
 
 from pydantic import BaseModel
 
 from devagent.agent import MaxToolRoundsError, run_agent
-from devagent.tools.registry import ToolRegistry
+from devagent.core.state import RuntimeState
+from devagent.rag.service import BM25RagService
+from devagent.tools.registry import ToolRegistry, build_tools
 
 
 class EchoArgs(BaseModel):
@@ -234,6 +238,73 @@ class AgentRuntimeTest(unittest.TestCase):
         self.assertEqual(
             [message["role"] for message in fake_chat.requests[2]["messages"]],
             ["user", "assistant", "tool", "assistant", "tool"],
+        )
+
+
+class KnowledgeSearchAgentIntegrationTest(unittest.TestCase):
+    """Tests the local BM25 evidence path through one agent tool loop."""
+
+    def test_bm25_evidence_enters_tool_message_before_final_answer(self) -> None:
+        policy_directory = (
+            Path(__file__).resolve().parents[1] / "data" / "policies"
+        )
+        rag_service = BM25RagService.from_directory(policy_directory)
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            state = RuntimeState(Path(temporary_directory) / "workspace")
+            registry = build_tools(state, rag_service)
+
+            assistant_tool_call = tool_call_message(
+                call_id="call_knowledge",
+                name="knowledge_search",
+                arguments=json.dumps(
+                    {
+                        "query": "托运行李超过20公斤每公斤收费60元",
+                        "top_k": 1,
+                    },
+                    ensure_ascii=False,
+                ),
+            )
+            fake_chat = FakeChat(
+                [
+                    assistant_tool_call,
+                    {
+                        "role": "assistant",
+                        "content": "超额行李按每公斤 60 元收费。",
+                    },
+                ]
+            )
+            trace_events: list[str] = []
+
+            answer = run_agent(
+                "请查询托运行李超重费用",
+                registry,
+                chat_fn=fake_chat,
+                trace_fn=trace_events.append,
+            )
+
+        self.assertEqual(answer, "超额行李按每公斤 60 元收费。")
+        second_messages = fake_chat.requests[1]["messages"]
+        self.assertEqual(
+            [message["role"] for message in second_messages],
+            ["user", "assistant", "tool"],
+        )
+        self.assertEqual(second_messages[2]["tool_call_id"], "call_knowledge")
+        tool_result = json.loads(second_messages[2]["content"])
+        self.assertTrue(tool_result["ok"])
+        self.assertEqual(tool_result["results"][0]["source"], "baggage_policy.md")
+        self.assertIn("60", tool_result["results"][0]["content"])
+        self.assertEqual(
+            trace_events[0],
+            "[tool_call] knowledge_search "
+            'query="托运行李超过20公斤每公斤收费60元" top_k=1',
+        )
+        self.assertRegex(
+            trace_events[1],
+            r"^\[retrieval_hit\] rank=1 source=baggage_policy\.md score=\d+\.\d{6}$",
+        )
+        self.assertEqual(
+            trace_events[2],
+            "[tool_result] returned_to_model=true",
         )
 
 
