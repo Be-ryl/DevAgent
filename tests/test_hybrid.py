@@ -3,11 +3,12 @@
 import json
 from pathlib import Path
 import tempfile
+from threading import Barrier, get_ident
 import unittest
 
 from devagent.agent import run_agent
 from devagent.core.state import RuntimeState
-from devagent.rag.hybrid import HybridRagService
+from devagent.rag.hybrid import HybridRagService, HybridRetrievalError
 from devagent.rag.service import RetrievalHit
 from devagent.tools.registry import build_tools
 
@@ -42,6 +43,23 @@ class StaticService:
         return self.hits[:top_k]
 
 
+class BarrierService(StaticService):
+    def __init__(self, hits: list[RetrievalHit], barrier: Barrier) -> None:
+        super().__init__(hits)
+        self.barrier = barrier
+        self.thread_ids: list[int] = []
+
+    def search(self, query: str, top_k: int = 5) -> list[RetrievalHit]:
+        self.thread_ids.append(get_ident())
+        self.barrier.wait(timeout=1.0)
+        return super().search(query, top_k)
+
+
+class FailingService:
+    def search(self, query: str, top_k: int = 5) -> list[RetrievalHit]:
+        raise ValueError("route unavailable")
+
+
 class HybridRagServiceTest(unittest.TestCase):
     def make_service(self) -> tuple[HybridRagService, StaticService, StaticService]:
         bm25 = StaticService(
@@ -58,7 +76,23 @@ class HybridRagServiceTest(unittest.TestCase):
                 hit("tail", "dense", 3),
             ]
         )
-        return HybridRagService(bm25, dense), bm25, dense
+        service = HybridRagService(bm25, dense)
+        self.addCleanup(service.close)
+        return service, bm25, dense
+
+    def test_bm25_and_dense_start_in_parallel(self) -> None:
+        barrier = Barrier(2)
+        bm25 = BarrierService([hit("bm25", "bm25", 1)], barrier)
+        dense = BarrierService([hit("dense", "dense", 1)], barrier)
+        service = HybridRagService(bm25, dense)
+        self.addCleanup(service.close)
+
+        results = service.search("并行检索", top_k=2)
+
+        self.assertEqual({item.chunk_id for item in results}, {"bm25", "dense"})
+        self.assertEqual(len(bm25.thread_ids), 1)
+        self.assertEqual(len(dense.thread_ids), 1)
+        self.assertNotEqual(bm25.thread_ids[0], dense.thread_ids[0])
 
     def test_fusion_keeps_single_route_hits_and_deduplicates_shared_chunks(self) -> None:
         service, bm25, dense = self.make_service()
@@ -103,6 +137,39 @@ class HybridRagServiceTest(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(len(first), 2)
         self.assertEqual([item.rank for item in first], [1, 2])
+
+    def test_parallel_fusion_preserves_sequential_rrf_order(self) -> None:
+        service, _, _ = self.make_service()
+
+        results = service.search("退票规则", top_k=10)
+
+        self.assertEqual(
+            [item.chunk_id for item in results],
+            ["shared", "tail", "bm25-only", "dense-only"],
+        )
+        self.assertEqual(
+            [(item.bm25_rank, item.dense_rank) for item in results],
+            [(1, 1), (3, 3), (2, None), (None, 2)],
+        )
+
+    def test_route_exception_is_propagated_with_route_name(self) -> None:
+        service = HybridRagService(
+            FailingService(),
+            StaticService([hit("dense", "dense", 1)]),
+        )
+        self.addCleanup(service.close)
+
+        with self.assertRaisesRegex(HybridRetrievalError, "BM25 retrieval failed"):
+            service.search("异常检索", top_k=1)
+
+    def test_close_is_idempotent_and_prevents_more_searches(self) -> None:
+        service, _, _ = self.make_service()
+
+        service.close()
+        service.close()
+
+        with self.assertRaisesRegex(RuntimeError, "HybridRagService is closed"):
+            service.search("退票规则", top_k=1)
 
     def test_hybrid_results_enter_tool_message_and_trace(self) -> None:
         service, _, _ = self.make_service()

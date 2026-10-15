@@ -228,10 +228,7 @@ class CliTest(unittest.TestCase):
         )
         self.assertEqual(stdout.getvalue(), "dense answer\n")
 
-    @patch(
-        "devagent.rag.hybrid.HybridRagService",
-        return_value=sentinel.hybrid_service,
-    )
+    @patch("devagent.rag.hybrid.HybridRagService")
     @patch(
         "devagent.rag.dense_index.DenseRagService.from_index",
         return_value=sentinel.dense_service,
@@ -287,14 +284,16 @@ class CliTest(unittest.TestCase):
             sentinel.bm25_service,
             sentinel.dense_service,
         )
+        hybrid_service = mock_hybrid_service.return_value
         mock_build_tools.assert_called_once_with(
             sentinel.state,
-            sentinel.hybrid_service,
+            hybrid_service,
         )
         mock_run_agent.assert_called_once_with(
             "search policies",
             sentinel.registry,
         )
+        hybrid_service.close.assert_called_once_with()
         self.assertEqual(stdout.getvalue(), "hybrid answer\n")
 
     @patch("devagent.cli.app.run_agent")

@@ -84,6 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     state = RuntimeState(args.workspace)
+    hybrid_service = None
     if args.retrieval_mode in {"dense", "hybrid"}:
         if args.dense_index_dir is None:
             print(
@@ -120,6 +121,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             bm25_service = BM25RagService.from_directory(knowledge_directory)
             rag_service = HybridRagService(bm25_service, dense_service)
+            hybrid_service = rag_service
         else:
             rag_service = dense_service
         registry = build_tools(state, rag_service)
@@ -128,13 +130,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         rag_service = BM25RagService.from_directory(knowledge_directory)
         registry = build_tools(state, rag_service)
-    if args.trace:
-        answer = run_agent(
-            args.message,
-            registry,
-            trace_fn=lambda event: print(event, file=sys.stderr),
-        )
-    else:
-        answer = run_agent(args.message, registry)
+    try:
+        if args.trace:
+            answer = run_agent(
+                args.message,
+                registry,
+                trace_fn=lambda event: print(event, file=sys.stderr),
+            )
+        else:
+            answer = run_agent(args.message, registry)
+    finally:
+        close = getattr(hybrid_service, "close", None)
+        if callable(close):
+            close()
     print(answer)
     return 0

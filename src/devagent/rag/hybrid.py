@@ -1,7 +1,9 @@
 """Minimal reciprocal-rank fusion over BM25 and Dense Retrieval."""
 
 from collections.abc import Sequence
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
+from threading import Lock
 from typing import Protocol
 
 from devagent.rag.service import RetrievalHit
@@ -9,6 +11,10 @@ from devagent.rag.service import RetrievalHit
 
 DEFAULT_CANDIDATE_K = 20
 DEFAULT_RRF_K = 60
+
+
+class HybridRetrievalError(RuntimeError):
+    """Raised when one of the Hybrid retrieval routes fails."""
 
 
 class RetrievalService(Protocol):
@@ -51,6 +57,58 @@ class HybridRagService:
         self.dense_service = dense_service
         self.candidate_top_k = candidate_top_k
         self.rrf_k = rrf_k
+        self._executor = ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="hybrid-retrieval",
+        )
+        self._state_lock = Lock()
+        self._closed = False
+
+    def close(self) -> None:
+        """Release the reusable retrieval worker threads."""
+        with self._state_lock:
+            if self._closed:
+                return
+            self._closed = True
+        self._executor.shutdown(wait=True)
+
+    def __enter__(self) -> "HybridRagService":
+        return self
+
+    def __exit__(self, exc_type: object, exc_value: object, traceback: object) -> None:
+        self.close()
+
+    def _submit_routes(
+        self,
+        query: str,
+    ) -> tuple[
+        Future[list[RetrievalHit]],
+        Future[list[RetrievalHit]],
+    ]:
+        with self._state_lock:
+            if self._closed:
+                raise RuntimeError("HybridRagService is closed")
+            bm25_future = self._executor.submit(
+                self.bm25_service.search,
+                query,
+                top_k=self.candidate_top_k,
+            )
+            dense_future = self._executor.submit(
+                self.dense_service.search,
+                query,
+                top_k=self.candidate_top_k,
+            )
+        return bm25_future, dense_future
+
+    @staticmethod
+    def _route_result(
+        route: str,
+        future: Future[list[RetrievalHit]],
+    ) -> list[RetrievalHit]:
+        try:
+            return future.result()
+        except Exception as error:
+            raise HybridRetrievalError(f"{route} retrieval failed") from error
 
     @staticmethod
     def _merge_route(
@@ -73,14 +131,10 @@ class HybridRagService:
         if not query.strip() or top_k <= 0:
             return []
 
-        bm25_hits = self.bm25_service.search(
-            query,
-            top_k=self.candidate_top_k,
-        )
-        dense_hits = self.dense_service.search(
-            query,
-            top_k=self.candidate_top_k,
-        )
+        bm25_future, dense_future = self._submit_routes(query)
+        wait((bm25_future, dense_future))
+        bm25_hits = self._route_result("BM25", bm25_future)
+        dense_hits = self._route_result("Dense", dense_future)
         candidates: dict[str, _FusedCandidate] = {}
         self._merge_route(candidates, bm25_hits, "bm25")
         self._merge_route(candidates, dense_hits, "dense")
