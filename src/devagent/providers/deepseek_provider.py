@@ -9,15 +9,18 @@ from openai import OpenAI
 def chat(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]] | None = None,
-    model: str = "deepseek-chat",
+    model: str | None = None,
 ) -> dict[str, Any]:
     """Return one complete assistant message from DeepSeek."""
     client = OpenAI(
         api_key=os.environ["DEEPSEEK_API_KEY"],
-        base_url="https://api.deepseek.com",
+        base_url=os.environ.get(
+            "DEEPSEEK_BASE_URL",
+            "https://api.deepseek.com",
+        ),
     )
     request: dict[str, Any] = {
-        "model": model,
+        "model": model or os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"),
         "messages": messages,
     }
     if tools is not None:
@@ -30,7 +33,7 @@ def chat(
     return assistant_message
 
 
-def generate_text(prompt: str, model: str = "deepseek-chat") -> str:
+def generate_text(prompt: str, model: str | None = None) -> str:
     """Generate plain text through ``chat`` for backward compatibility."""
     assistant_message = chat(
         messages=[{"role": "user", "content": prompt}],

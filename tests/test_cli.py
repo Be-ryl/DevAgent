@@ -1,4 +1,4 @@
-"""Tests for the one-request DevAgent command-line interface."""
+"""Tests for the DevAgent command-line execution mode selection."""
 
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
@@ -6,24 +6,33 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch, sentinel
+from unittest.mock import patch
 
 from devagent.cli.app import main
+from devagent.execution import ExecutionMode, RunMetrics, RunResult
+
+
+def successful_result(mode: ExecutionMode, answer: str) -> RunResult:
+    return RunResult(
+        final_answer=answer,
+        metrics=RunMetrics(execution_mode=mode, completed=True),
+    )
 
 
 class CliTest(unittest.TestCase):
     """Tests for CLI assembly without model or tool execution."""
 
-    @patch("devagent.cli.app.run_agent", return_value="final answer")
-    @patch("devagent.cli.app.build_tools", return_value=sentinel.registry)
-    @patch("devagent.cli.app.RuntimeState", return_value=sentinel.state)
-    def test_cli_builds_runtime_and_prints_answer(
+    @patch("devagent.cli.app.RunnerFactory")
+    def test_cli_defaults_to_single_mode_and_prints_answer(
         self,
-        mock_runtime_state,
-        mock_build_tools,
-        mock_run_agent,
+        mock_factory_class,
     ) -> None:
         workspace = Path("/tmp/devagent-cli-workspace")
+        runner = mock_factory_class.return_value.create.return_value
+        runner.run.return_value = successful_result(
+            ExecutionMode.SINGLE,
+            "final answer",
+        )
         stdout = StringIO()
 
         with patch.dict(
@@ -39,22 +48,94 @@ class CliTest(unittest.TestCase):
             )
 
         self.assertEqual(status, 0)
-        mock_runtime_state.assert_called_once_with(workspace)
-        mock_build_tools.assert_called_once_with(sentinel.state)
-        mock_run_agent.assert_called_once_with(
-            "read the project file",
-            sentinel.registry,
+        mock_factory_class.return_value.create.assert_called_once_with(
+            ExecutionMode.SINGLE
         )
+        config = runner.run.call_args.args[0]
+        self.assertEqual(config.task, "read the project file")
+        self.assertEqual(config.workspace, workspace)
+        self.assertEqual(config.mode, ExecutionMode.SINGLE)
         self.assertEqual(stdout.getvalue(), "final answer\n")
 
-    @patch("devagent.cli.app.run_agent")
-    @patch("devagent.cli.app.build_tools")
-    @patch("devagent.cli.app.RuntimeState")
+    @patch("devagent.cli.app.RunnerFactory")
+    def test_cli_mode_option_switches_runner(self, mock_factory_class) -> None:
+        runner = mock_factory_class.return_value.create.return_value
+        runner.run.return_value = successful_result(
+            ExecutionMode.MULTI,
+            "multi result",
+        )
+
+        with patch.dict(
+            os.environ,
+            {"DEEPSEEK_API_KEY": "test-key-not-a-real-secret"},
+        ), redirect_stdout(StringIO()):
+            status = main(["--mode", "multi", "implement task"])
+
+        self.assertEqual(status, 0)
+        mock_factory_class.return_value.create.assert_called_once_with(
+            ExecutionMode.MULTI
+        )
+        config = runner.run.call_args.args[0]
+        self.assertEqual(config.mode, ExecutionMode.MULTI)
+
+    @patch("devagent.cli.app.RunnerFactory")
+    def test_cli_forwards_approval_mode(self, mock_factory_class) -> None:
+        runner = mock_factory_class.return_value.create.return_value
+        runner.run.return_value = successful_result(
+            ExecutionMode.SINGLE,
+            "approval result",
+        )
+
+        with patch.dict(
+            os.environ,
+            {"DEEPSEEK_API_KEY": "test-key-not-a-real-secret"},
+        ), redirect_stdout(StringIO()):
+            status = main(
+                ["--approval-mode", "deny", "run a safe coding task"]
+            )
+
+        self.assertEqual(status, 0)
+        config = runner.run.call_args.args[0]
+        self.assertEqual(config.approval_mode, "deny")
+        self.assertIsNone(config.approval_callback)
+
+    @patch(
+        "devagent.cli.app.load_checkpoint_state",
+        return_value={"execution_mode": "multi", "task": "resume task"},
+    )
+    @patch("devagent.cli.app.RunnerFactory")
+    def test_cli_resume_infers_mode_from_checkpoint(
+        self,
+        mock_factory_class,
+        mock_load_checkpoint,
+    ) -> None:
+        workspace = Path("/tmp/devagent-resume-workspace")
+        runner = mock_factory_class.return_value.create.return_value
+        runner.run.return_value = successful_result(
+            ExecutionMode.MULTI,
+            "resumed result",
+        )
+
+        with patch.dict(
+            os.environ,
+            {"DEEPSEEK_API_KEY": "test-key-not-a-real-secret"},
+        ), redirect_stdout(StringIO()):
+            status = main(["--resume", str(workspace)])
+
+        self.assertEqual(status, 0)
+        mock_load_checkpoint.assert_called_once_with(workspace)
+        mock_factory_class.return_value.create.assert_called_once_with(
+            ExecutionMode.MULTI
+        )
+        config = runner.run.call_args.args[0]
+        self.assertTrue(config.resume)
+        self.assertEqual(config.workspace, workspace)
+        self.assertEqual(config.mode, ExecutionMode.MULTI)
+
+    @patch("devagent.cli.app.RunnerFactory")
     def test_missing_api_key_returns_clear_error(
         self,
-        mock_runtime_state,
-        mock_build_tools,
-        mock_run_agent,
+        mock_factory_class,
     ) -> None:
         stderr = StringIO()
 
@@ -66,19 +147,18 @@ class CliTest(unittest.TestCase):
         self.assertEqual(status, 2)
         self.assertIn("DEEPSEEK_API_KEY is not set", stderr.getvalue())
         self.assertNotIn("Traceback", stderr.getvalue())
-        mock_runtime_state.assert_not_called()
-        mock_build_tools.assert_not_called()
-        mock_run_agent.assert_not_called()
+        mock_factory_class.assert_not_called()
 
-    @patch("devagent.cli.app.run_agent", return_value="loaded from dotenv")
-    @patch("devagent.cli.app.build_tools", return_value=sentinel.registry)
-    @patch("devagent.cli.app.RuntimeState", return_value=sentinel.state)
+    @patch("devagent.cli.app.RunnerFactory")
     def test_cli_loads_api_key_from_gitignored_dotenv(
         self,
-        mock_runtime_state,
-        mock_build_tools,
-        mock_run_agent,
+        mock_factory_class,
     ) -> None:
+        runner = mock_factory_class.return_value.create.return_value
+        runner.run.return_value = successful_result(
+            ExecutionMode.SINGLE,
+            "loaded from dotenv",
+        )
         stdout = StringIO()
 
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -97,9 +177,8 @@ class CliTest(unittest.TestCase):
 
         self.assertEqual(status, 0)
         self.assertEqual(loaded_key, "dotenv-test-key")
-        mock_runtime_state.assert_called_once_with(project_directory)
-        mock_build_tools.assert_called_once_with(sentinel.state)
-        mock_run_agent.assert_called_once_with("hello", sentinel.registry)
+        config = runner.run.call_args.args[0]
+        self.assertEqual(config.workspace, project_directory)
         self.assertEqual(stdout.getvalue(), "loaded from dotenv\n")
 
     @patch("devagent.__main__.cli_main", return_value=0)

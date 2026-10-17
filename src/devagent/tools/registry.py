@@ -7,9 +7,12 @@ from typing import Any, TypedDict
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from devagent.core.approval import ApprovalPolicy
 from devagent.core.state import RuntimeState
 from devagent.tools.bash_tool import run_command
 from devagent.tools.file_tools import edit_file, read_file, search_text, write_file
+from devagent.tools.todo_tool import update_todo
+from devagent.tools.web_search_tool import web_search
 
 
 class ToolArgs(BaseModel):
@@ -53,7 +56,23 @@ class RunCommandArgs(ToolArgs):
     """Arguments for ``run_command``."""
 
     command: list[str]
-    timeout: float = 30.0
+    timeout: float | None = None
+
+
+class WebSearchArgs(ToolArgs):
+    """Arguments for ``WebSearchTool``."""
+
+    query: str
+    max_results: int = 5
+    include_answer: bool = True
+
+
+class TodoUpdateArgs(ToolArgs):
+    """Arguments for ``TodoUpdateTool``."""
+
+    todo_id: str
+    status: str
+    note: str = ""
 
 
 class ToolDefinition(TypedDict):
@@ -124,7 +143,12 @@ class ToolRegistry(dict[str, ToolDefinition]):
         return tool["function"](**validated.model_dump())
 
 
-def build_tools(state: RuntimeState) -> ToolRegistry:
+def build_tools(
+    state: RuntimeState,
+    command_timeout: float = 30.0,
+    approval_policy: ApprovalPolicy | None = None,
+    actor: str = "agent",
+) -> ToolRegistry:
     """Build the tool registry with ``state`` bound to every callable."""
     return ToolRegistry({
         "read_file": {
@@ -155,7 +179,84 @@ def build_tools(state: RuntimeState) -> ToolRegistry:
             "name": "run_command",
             "description": "Run a command with the workspace as its directory.",
             "args_model": RunCommandArgs,
-            "function": partial(run_command, state),
+            "function": lambda command, timeout=None: run_command(
+                state,
+                command,
+                timeout=(
+                    command_timeout
+                    if timeout is None
+                    else min(timeout, command_timeout)
+                ),
+                approval_policy=approval_policy,
+                actor=actor,
+            ),
         },
     })
+
+
+def build_web_search_tools() -> ToolRegistry:
+    """Build the only registry SearchAgent is allowed to use."""
+    return ToolRegistry({
+        "WebSearchTool": {
+            "name": "WebSearchTool",
+            "description": (
+                "Search the web with Tavily and return an answer plus source URLs."
+            ),
+            "args_model": WebSearchArgs,
+            "function": web_search,
+        }
+    })
+
+
+def build_single_tools(
+    state: RuntimeState,
+    command_timeout: float = 30.0,
+    approval_policy: ApprovalPolicy | None = None,
+) -> ToolRegistry:
+    """Expose every stage-two tool to the single agent."""
+    tools = build_tools(
+        state,
+        command_timeout,
+        approval_policy,
+        actor="SingleAgent",
+    )
+    tools.update(build_web_search_tools())
+    return tools
+
+
+def build_verifier_tools(
+    state: RuntimeState,
+    command_timeout: float = 30.0,
+) -> ToolRegistry:
+    """Expose inspection tools without any file mutation capability."""
+    del command_timeout
+    all_tools = build_tools(state)
+    return ToolRegistry({
+        name: all_tools[name]
+        for name in ("read_file", "search_text")
+    })
+
+
+def build_code_tools(
+    state: RuntimeState,
+    todos: list[dict[str, str]],
+    command_timeout: float = 30.0,
+    approval_policy: ApprovalPolicy | None = None,
+) -> ToolRegistry:
+    """Expose coding tools plus todo status updates to CodeAgent."""
+    tools = build_tools(
+        state,
+        command_timeout,
+        approval_policy,
+        actor="CodeAgent",
+    )
+    tools["TodoUpdateTool"] = {
+        "name": "TodoUpdateTool",
+        "description": (
+            "Update an existing todo to pending, in_progress, completed, or blocked."
+        ),
+        "args_model": TodoUpdateArgs,
+        "function": partial(update_todo, todos),
+    }
+    return tools
 

@@ -5,15 +5,17 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "devagent"
 version = "0.1.0"
-description = "DevAgent project bootstrap"
+description = "DevAgent - 面向复杂编码任务的多 Agent 代码执行平台"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "jieba>=0.42,<1",
+    "langchain>=1.0,<2",
+    "langchain-openai>=1.0,<2",
+    "langgraph>=1.0,<2",
     "openai>=1.0.0",
     "pydantic>=2.0,<3",
     "python-dotenv>=1.0,<2",
-    "rank-bm25>=0.2,<1",
+    "tavily-python>=0.7,<1",
 ]
 
 [project.scripts]
